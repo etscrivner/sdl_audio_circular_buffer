@@ -37,8 +37,8 @@ else
   CXX=c++
 endif
 
-CXXFLAGS=-std=c++14 --debug
-CXXWFLAGS=-Wall -Werror
+CXXFLAGS=-std=c++14
+CXXWFLAGS=-Wall -Wextra -Werror
 
 # Files to build
 #
@@ -52,7 +52,7 @@ PROGRAM_OFILES=src/circular_buffer.o
 SDL2_VER=SDL2-2.0.6
 
 ifeq ($(OS),$(filter $(OS),linux macos))
-  CXXFLAGS+=-Ioutside/$(SDL2_VER)/include -Loutside/$(SDL2_VER)/build
+  CXXFLAGS+=-Ioutside/$(SDL2_VER)/include # -Loutside/$(SDL2_VER)/build
   SDL2_LIB=outside/$(SDL2_VER)/build/libSDL2.la
   PROGRAM_OUTSIDE+=$(SDL2_LIB)
   PROGRAM_LIBS=-lSDL2 -lSDL2main
@@ -69,7 +69,7 @@ all: $(PROGRAM_NAME)
 
 $(PROGRAM_NAME): clean $(BUILD)/$(PROGRAM_NAME)
 
-$(BUILD)/$(PROGRAM_NAME): $(PROGRAM_OFILES) $(PROGRAM_OUTSIDE)
+$(BUILD)/$(PROGRAM_NAME): $(PROGRAM_OUTSIDE) $(PROGRAM_OFILES)
 	@echo "    BUILD  $(BUILD)/$(PROGRAM_NAME)"
 	@mkdir -p $(BUILD)
 	@$(CXX) $(CXXFLAGS) -o $(BUILD)/$(PROGRAM_NAME) $(PROGRAM_OFILES) $(PROGRAM_LIBS)
@@ -80,6 +80,7 @@ $(BUILD)/$(PROGRAM_NAME): $(PROGRAM_OFILES) $(PROGRAM_OUTSIDE)
 
 $(SDL2_LIB):
 	@echo "    CXX    $(SDL2_VER)"
+	cd outside && tar -xzf $(SDL2_VER).tar.gz
 	cd outside/$(SDL2_VER) && ./configure
 	$(MAKE) -C outside/$(SDL2_VER)
 
