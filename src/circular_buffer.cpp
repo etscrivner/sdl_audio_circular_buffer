@@ -35,6 +35,12 @@ struct platform_audio_buffer
   platform_audio_config* AudioConfig;
 };
 
+struct platform_audio_thread_context
+{
+  platform_audio_buffer* AudioBuffer;
+  platform_program_state* ProgramState;
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 
 internal Sint16
@@ -184,6 +190,24 @@ PlatformHandleEvent(platform_program_state* ProgramState)
 
 ///////////////////////////////////////////////////////////////////////////////
 
+internal int
+PlatformAudioThread(void* UserData)
+{
+  platform_audio_thread_context* AudioThread =
+    (platform_audio_thread_context*)UserData;
+
+  while (AudioThread->ProgramState->IsRunning)
+  {
+    SDL_LockAudioDevice(AudioThread->AudioBuffer->DeviceID);
+    SampleIntoAudioBuffer(AudioThread->AudioBuffer, &SampleSquareWave);
+    SDL_UnlockAudioDevice(AudioThread->AudioBuffer->DeviceID);
+  }
+
+  return 0;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
 int main()
 {
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
@@ -235,6 +259,13 @@ int main()
   platform_program_state ProgramState = {};
   ProgramState.IsRunning = true;
 
+  platform_audio_thread_context AudioThreadContext = {};
+  AudioThreadContext.AudioBuffer = &AudioBuffer;
+  AudioThreadContext.ProgramState = &ProgramState;
+  SDL_Thread* AudioThread = SDL_CreateThread(
+    PlatformAudioThread, "AudioThread", (void*)&AudioThreadContext
+  );
+
   while (ProgramState.IsRunning)
   {
     while (SDL_PollEvent(&ProgramState.LastEvent))
@@ -242,14 +273,12 @@ int main()
       PlatformHandleEvent(&ProgramState);
     }
 
-    SDL_LockAudioDevice(AudioBuffer.DeviceID);
-    SampleIntoAudioBuffer(&AudioBuffer, &SampleSineWave);
-    SDL_UnlockAudioDevice(AudioBuffer.DeviceID);
-
     SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 0);
     SDL_RenderClear(Renderer);
     SDL_RenderPresent(Renderer);
   }
+
+  SDL_WaitThread(AudioThread, NULL);
 
   SDL_DestroyRenderer(Renderer);
   SDL_DestroyWindow(Window);
