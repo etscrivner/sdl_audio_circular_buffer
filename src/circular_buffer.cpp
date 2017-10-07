@@ -2,12 +2,25 @@
 
 #define internal static
 
+typedef float Real32;
+
+static Real32 PI = 3.14159265359;
+static Real32 TAU = 2*PI;
+
 ///////////////////////////////////////////////////////////////////////////////
 
 struct platform_program_state
 {
   bool IsRunning;
   SDL_Event LastEvent;
+};
+
+struct platform_audio_config
+{
+  int ToneHz;
+  int ToneVolume;
+  int WavePeriod;
+  int SampleIndex;
 };
 
 struct platform_audio_buffer
@@ -19,7 +32,81 @@ struct platform_audio_buffer
   int ReadCursor;
   int WriteCursor;
   SDL_AudioDeviceID DeviceID;
+  platform_audio_config* AudioConfig;
 };
+
+///////////////////////////////////////////////////////////////////////////////
+
+internal Sint16
+SampleSquareWave(platform_audio_config* AudioConfig)
+{
+  int HalfSquareWaveCounter = AudioConfig->WavePeriod / 2;
+  if ((AudioConfig->SampleIndex / HalfSquareWaveCounter) % 2 == 0)
+  {
+    return AudioConfig->ToneVolume;
+  }
+
+  return -AudioConfig->ToneVolume;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+internal Sint16
+SampleSineWave(platform_audio_config* AudioConfig)
+{
+  int HalfWaveCounter = AudioConfig->WavePeriod / 2;
+  return AudioConfig->ToneVolume * sin(
+    TAU * AudioConfig->SampleIndex / HalfWaveCounter
+  );
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+internal void
+SampleIntoAudioBuffer(platform_audio_buffer* AudioBuffer,
+                      Sint16 (*GetSample)(platform_audio_config*))
+{
+  int Region1Size = AudioBuffer->ReadCursor - AudioBuffer->WriteCursor;
+  int Region2Size = 0;
+  if (AudioBuffer->ReadCursor < AudioBuffer->WriteCursor)
+  {
+    // Fill to the end of the buffer and loop back around and fill to the read
+    // cursor.
+    Region1Size = AudioBuffer->Size - AudioBuffer->WriteCursor;
+    Region2Size = AudioBuffer->ReadCursor;
+  }
+
+  int Region1Samples = Region1Size / AudioBuffer->BytesPerSample;
+  int Region2Samples = Region2Size / AudioBuffer->BytesPerSample;
+  int BytesWritten = Region1Size + Region2Size;
+
+  platform_audio_config* AudioConfig = AudioBuffer->AudioConfig;
+
+  Sint16* Buffer = (Sint16*)&AudioBuffer->Buffer[AudioBuffer->WriteCursor];
+  for (int SampleIndex = 0;
+       SampleIndex < Region1Samples;
+       SampleIndex++)
+  {
+    Sint16 SampleValue = (*GetSample)(AudioConfig);
+    *Buffer++ = SampleValue;
+    *Buffer++ = SampleValue;
+    AudioConfig->SampleIndex++;
+  }
+
+  Buffer = (Sint16*)AudioBuffer->Buffer;
+  for (int SampleIndex = 0;
+       SampleIndex < Region2Samples;
+       SampleIndex++)
+  {
+    Sint16 SampleValue = (*GetSample)(AudioConfig);
+    *Buffer++ = SampleValue;
+    *Buffer++ = SampleValue;
+    AudioConfig->SampleIndex++;
+  }
+
+  AudioBuffer->WriteCursor =
+    (AudioBuffer->WriteCursor + BytesWritten) % AudioBuffer->Size;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -137,6 +224,14 @@ int main()
 
   PlatformInitializeAudio(&AudioBuffer);
 
+  platform_audio_config AudioConfig = {};
+  AudioConfig.ToneHz = 256;
+  AudioConfig.ToneVolume = 3000;
+  AudioConfig.WavePeriod =
+    AudioBuffer.SamplesPerSecond / AudioConfig.ToneHz;
+  AudioConfig.SampleIndex = 0;
+  AudioBuffer.AudioConfig = &AudioConfig;
+
   platform_program_state ProgramState = {};
   ProgramState.IsRunning = true;
 
@@ -146,6 +241,8 @@ int main()
     {
       PlatformHandleEvent(&ProgramState);
     }
+
+    SampleIntoAudioBuffer(&AudioBuffer, &SampleSineWave);
 
     SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 0);
     SDL_RenderClear(Renderer);
