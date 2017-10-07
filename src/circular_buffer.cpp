@@ -242,7 +242,9 @@ int main()
       PlatformHandleEvent(&ProgramState);
     }
 
+    SDL_LockAudioDevice(AudioBuffer.DeviceID);
     SampleIntoAudioBuffer(&AudioBuffer, &SampleSineWave);
+    SDL_UnlockAudioDevice(AudioBuffer.DeviceID);
 
     SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 0);
     SDL_RenderClear(Renderer);
