@@ -117,7 +117,7 @@ SampleIntoAudioBuffer(platform_audio_buffer* AudioBuffer,
 ///////////////////////////////////////////////////////////////////////////////
 
 internal void
-PlatformFillAudioBuffer(void* UserData, Uint8* SystemBuffer, int Length)
+PlatformFillDeviceBuffer(void* UserData, Uint8* DeviceBuffer, int Length)
 {
   platform_audio_buffer* AudioBuffer = (platform_audio_buffer*)UserData;
 
@@ -135,12 +135,12 @@ PlatformFillAudioBuffer(void* UserData, Uint8* SystemBuffer, int Length)
   }
 
   SDL_memcpy(
-    SystemBuffer,
+    DeviceBuffer,
     (AudioBuffer->Buffer + AudioBuffer->ReadCursor),
     Region1Size
   );
   SDL_memcpy(
-    &SystemBuffer[Region1Size],
+    &DeviceBuffer[Region1Size],
     AudioBuffer->Buffer,
     Region2Size
   );
@@ -159,7 +159,7 @@ PlatformInitializeAudio(platform_audio_buffer* AudioBuffer)
   AudioSettings.format = AUDIO_S16LSB;
   AudioSettings.channels = 2;
   AudioSettings.samples = 4096;
-  AudioSettings.callback = &PlatformFillAudioBuffer;
+  AudioSettings.callback = &PlatformFillDeviceBuffer;
   AudioSettings.userdata = AudioBuffer;
 
   SDL_AudioSpec Obtained = {};
@@ -234,7 +234,7 @@ int main()
   SDL_Renderer* Renderer = SDL_CreateRenderer(Window, -1, 0);
 
   platform_audio_buffer AudioBuffer = {};
-  AudioBuffer.SamplesPerSecond = 44800;
+  AudioBuffer.SamplesPerSecond = 44100;
   // Two data points per sample. One for the left speaker, one for the right.
   AudioBuffer.BytesPerSample = 2 * sizeof(Sint16);
   AudioBuffer.ReadCursor = 0;
