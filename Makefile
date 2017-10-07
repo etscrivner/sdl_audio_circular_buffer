@@ -37,8 +37,12 @@ else
   CXX=c++
 endif
 
-CXXFLAGS=-std=c++14 --debug
+CXXFLAGS=-std=c++14
 CXXWFLAGS=-Wall -Wextra
+
+ifeq ($(DEBUG),1)
+  CXXFLAGS+=--debug
+endif
 
 # Files to build
 #
