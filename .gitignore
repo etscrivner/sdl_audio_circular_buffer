@@ -1,0 +1,9 @@
+# Build
+*.o
+build
+build/*
+
+# Emacs
+*~
+\#*\#
+.\#*
