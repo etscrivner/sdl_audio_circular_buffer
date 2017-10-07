@@ -13,7 +13,7 @@ struct platform_program_state
 struct platform_audio_buffer
 {
   Uint8* Buffer;
-  int BufferSize;
+  int Size;
   int SamplesPerSecond;
   int BytesPerSample;
   int ReadCursor;
@@ -24,9 +24,36 @@ struct platform_audio_buffer
 ///////////////////////////////////////////////////////////////////////////////
 
 internal void
-PlatformFillAudioBuffer(void*, Uint8* SystemBuffer, int Length)
+PlatformFillAudioBuffer(void* UserData, Uint8* SystemBuffer, int Length)
 {
-  memset(SystemBuffer, 0, Length);
+  platform_audio_buffer* AudioBuffer = (platform_audio_buffer*)UserData;
+
+  // Keep track of two regions. Region1 contains everything from the current
+  // PlayCursor up until, potentially, the end of the buffer. Region2 only
+  // exists if we need to circle back around. It contains all the data from the
+  // beginning of the buffer up until sufficient bytes are read to meet Length.
+  int Region1Size = Length;
+  int Region2Size = 0;
+  if (AudioBuffer->ReadCursor + Length > AudioBuffer->Size)
+  {
+    // Handle looping back from the beginning.
+    Region1Size = AudioBuffer->Size - AudioBuffer->ReadCursor;
+    Region2Size = Length - Region1Size;
+  }
+
+  SDL_memcpy(
+    SystemBuffer,
+    (AudioBuffer->Buffer + AudioBuffer->ReadCursor),
+    Region1Size
+  );
+  SDL_memcpy(
+    &SystemBuffer[Region1Size],
+    AudioBuffer->Buffer,
+    Region2Size
+  );
+
+  AudioBuffer->ReadCursor =
+    (AudioBuffer->ReadCursor + Length) % AudioBuffer->Size;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -103,9 +130,10 @@ int main()
   // NOTE: Offset by 1 sample in order to cause the circular buffer to
   // initially be filled.
   AudioBuffer.WriteCursor = AudioBuffer.BytesPerSample;
-  AudioBuffer.BufferSize =
+  AudioBuffer.Size =
     AudioBuffer.SamplesPerSecond * AudioBuffer.BytesPerSample;
-  AudioBuffer.Buffer = new Uint8[AudioBuffer.BufferSize];
+  AudioBuffer.Buffer = new Uint8[AudioBuffer.Size];
+  memset(AudioBuffer.Buffer, 0, AudioBuffer.Size);
 
   PlatformInitializeAudio(&AudioBuffer);
 
