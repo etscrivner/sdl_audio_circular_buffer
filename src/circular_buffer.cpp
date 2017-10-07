@@ -199,7 +199,7 @@ PlatformAudioThread(void* UserData)
   while (AudioThread->ProgramState->IsRunning)
   {
     SDL_LockAudioDevice(AudioThread->AudioBuffer->DeviceID);
-    SampleIntoAudioBuffer(AudioThread->AudioBuffer, &SampleSquareWave);
+    SampleIntoAudioBuffer(AudioThread->AudioBuffer, &SampleSineWave);
     SDL_UnlockAudioDevice(AudioThread->AudioBuffer->DeviceID);
   }
 
@@ -263,7 +263,7 @@ int main()
   AudioThreadContext.AudioBuffer = &AudioBuffer;
   AudioThreadContext.ProgramState = &ProgramState;
   SDL_Thread* AudioThread = SDL_CreateThread(
-    PlatformAudioThread, "AudioThread", (void*)&AudioThreadContext
+    PlatformAudioThread, "Audio", (void*)&AudioThreadContext
   );
 
   while (ProgramState.IsRunning)
