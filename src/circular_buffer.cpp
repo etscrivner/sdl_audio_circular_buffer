@@ -6,6 +6,7 @@ typedef float Real32;
 
 static Real32 PI = 3.14159265359;
 static Real32 TAU = 2*PI;
+static Uint32 SDL_AUDIO_TRANSPARENTLY_CONVERT_FORMAT = 0;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -21,14 +22,14 @@ struct platform_audio_config
   int ToneVolume;
   int WavePeriod;
   int SampleIndex;
+  int SamplesPerSecond;
+  int BytesPerSample;
 };
 
 struct platform_audio_buffer
 {
   Uint8* Buffer;
   int Size;
-  int SamplesPerSecond;
-  int BytesPerSample;
   int ReadCursor;
   int WriteCursor;
   SDL_AudioDeviceID DeviceID;
@@ -82,11 +83,11 @@ SampleIntoAudioBuffer(platform_audio_buffer* AudioBuffer,
     Region2Size = AudioBuffer->ReadCursor;
   }
 
-  int Region1Samples = Region1Size / AudioBuffer->BytesPerSample;
-  int Region2Samples = Region2Size / AudioBuffer->BytesPerSample;
-  int BytesWritten = Region1Size + Region2Size;
-
   platform_audio_config* AudioConfig = AudioBuffer->AudioConfig;
+
+  int Region1Samples = Region1Size / AudioConfig->BytesPerSample;
+  int Region2Samples = Region2Size / AudioConfig->BytesPerSample;
+  int BytesWritten = Region1Size + Region2Size;
 
   Sint16* Buffer = (Sint16*)&AudioBuffer->Buffer[AudioBuffer->WriteCursor];
   for (int SampleIndex = 0;
@@ -117,7 +118,7 @@ SampleIntoAudioBuffer(platform_audio_buffer* AudioBuffer,
 ///////////////////////////////////////////////////////////////////////////////
 
 internal void
-PlatformFillDeviceBuffer(void* UserData, Uint8* DeviceBuffer, int Length)
+PlatformFillAudioDeviceBuffer(void* UserData, Uint8* DeviceBuffer, int Length)
 {
   platform_audio_buffer* AudioBuffer = (platform_audio_buffer*)UserData;
 
@@ -155,19 +156,20 @@ internal void
 PlatformInitializeAudio(platform_audio_buffer* AudioBuffer)
 {
   SDL_AudioSpec AudioSettings = {};
-  AudioSettings.freq = AudioBuffer->SamplesPerSecond;
+  AudioSettings.freq = AudioBuffer->AudioConfig->SamplesPerSecond;
   AudioSettings.format = AUDIO_S16LSB;
   AudioSettings.channels = 2;
   AudioSettings.samples = 4096;
-  AudioSettings.callback = &PlatformFillDeviceBuffer;
+  AudioSettings.callback = &PlatformFillAudioDeviceBuffer;
   AudioSettings.userdata = AudioBuffer;
 
-  SDL_AudioSpec Obtained = {};
+  SDL_AudioSpec ObtainedSettings = {};
   AudioBuffer->DeviceID = SDL_OpenAudioDevice(
-    NULL, 0, &AudioSettings, &Obtained, 0
+    NULL, 0, &AudioSettings, &ObtainedSettings,
+    SDL_AUDIO_TRANSPARENTLY_CONVERT_FORMAT
   );
 
-  if (AudioSettings.format != Obtained.format)
+  if (AudioSettings.format != ObtainedSettings.format)
   {
     SDL_Log("Unable to obtain expected audio settings: %s", SDL_GetError());
     exit(1);
@@ -233,28 +235,28 @@ int main()
 
   SDL_Renderer* Renderer = SDL_CreateRenderer(Window, -1, 0);
 
-  platform_audio_buffer AudioBuffer = {};
-  AudioBuffer.SamplesPerSecond = 44100;
-  // Two data points per sample. One for the left speaker, one for the right.
-  AudioBuffer.BytesPerSample = 2 * sizeof(Sint16);
-  AudioBuffer.ReadCursor = 0;
-  // NOTE: Offset by 1 sample in order to cause the circular buffer to
-  // initially be filled.
-  AudioBuffer.WriteCursor = AudioBuffer.BytesPerSample;
-  AudioBuffer.Size =
-    AudioBuffer.SamplesPerSecond * AudioBuffer.BytesPerSample;
-  AudioBuffer.Buffer = new Uint8[AudioBuffer.Size];
-  memset(AudioBuffer.Buffer, 0, AudioBuffer.Size);
-
-  PlatformInitializeAudio(&AudioBuffer);
-
   platform_audio_config AudioConfig = {};
+  AudioConfig.SamplesPerSecond = 44100;
+  AudioConfig.BytesPerSample = 2 * sizeof(Sint16);
+  AudioConfig.SampleIndex = 0;
   AudioConfig.ToneHz = 256;
   AudioConfig.ToneVolume = 3000;
   AudioConfig.WavePeriod =
-    AudioBuffer.SamplesPerSecond / AudioConfig.ToneHz;
-  AudioConfig.SampleIndex = 0;
+    AudioConfig.SamplesPerSecond / AudioConfig.ToneHz;
+
+  platform_audio_buffer AudioBuffer = {};
+  AudioBuffer.Size =
+    AudioConfig.SamplesPerSecond * AudioConfig.BytesPerSample;
+  AudioBuffer.Buffer = new Uint8[AudioBuffer.Size];
+  // Two data points per sample. One for the left speaker, one for the right.
+  AudioBuffer.ReadCursor = 0;
+  // NOTE: Offset by 1 sample in order to cause the circular buffer to
+  // initially be filled.
+  AudioBuffer.WriteCursor = AudioConfig.BytesPerSample;
   AudioBuffer.AudioConfig = &AudioConfig;
+  memset(AudioBuffer.Buffer, 0, AudioBuffer.Size);
+
+  PlatformInitializeAudio(&AudioBuffer);
 
   platform_program_state ProgramState = {};
   ProgramState.IsRunning = true;
